@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>University Queue System - Professional Display</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root { --primary: #003366; --gold: #d4af37; --bg: #0f172a; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--bg); font-family: sans-serif; color: white; }
+        
+        .main-wrapper { display: flex; height: calc(100% - 65px); padding: 15px; box-sizing: border-box; gap: 15px; }
+        
+        /* قسم الفيديو مع اللوجو العائم */
+        #videoSection { flex: 1.4; border-radius: 20px; overflow: hidden; background: #000; position: relative; border: 1px solid rgba(255,255,255,0.1); }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        
+        .logo-overlay {
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            width: 130px; /* يمكنك تكبير أو تصغير اللوجو من هنا */
+            z-index: 10;
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.4));
+        }
+
+        #numberSection { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .current-call { flex: 2; background: rgba(255,255,255,0.05); border: 2px solid var(--gold); border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 0 30px rgba(212, 175, 55, 0.2); }
+        .current-call h2 { margin: 0; color: var(--gold); font-size: 30px; text-transform: uppercase; letter-spacing: 2px; }
+        .current-call .number { font-size: 140px; font-weight: bold; line-height: 1; margin: 10px 0; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
+        .current-call .window { font-size: 40px; background: var(--primary); padding: 5px 30px; border-radius: 10px; border: 1px solid var(--gold); }
+
+        .history-section { flex: 1; background: rgba(0,0,0,0.5); border-radius: 20px; padding: 15px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; }
+        .history-section h3 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        .history-items { display: flex; flex-direction: column; gap: 8px; overflow: hidden; flex: 1; }
+        .history-item { background: rgba(255,255,255,0.05); padding: 12px 20px; border-radius: 10px; font-size: 24px; font-weight: bold; display: flex; justify-content: space-between; border-left: 4px solid var(--gold); }
+
+        .ticker-wrap { height: 65px; background: var(--primary); border-top: 3px solid var(--gold); display: flex; align-items: center; overflow: hidden; white-space: nowrap; box-shadow: 0 -5px 20px rgba(0,0,0,0.5); }
+        .ticker-text { display: inline-block; padding-left: 100%; font-size: 30px; font-weight: bold; color: white; animation: ticker 20s linear infinite; }
+        @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
+
+        /* لوحة التحكم المخفية */
+        #settingsBtn { position: fixed; top: 10px; right: 10px; opacity: 0.1; cursor: pointer; z-index: 1000; background: black; color: white; border: 1px solid white; border-radius: 5px; padding: 5px; transition: 0.3s; }
+        #settingsBtn:hover { opacity: 1; }
+        #settingsPanel { position: fixed; top: 50px; right: 10px; background: rgba(0,0,0,0.9); padding: 20px; border: 1px solid var(--gold); border-radius: 10px; z-index: 1000; display: none; width: 300px; }
+        .s-group { margin-bottom: 15px; }
+        .s-group label { display: block; font-size: 12px; color: var(--gold); margin-bottom: 5px; }
+        .s-group input { width: 100%; padding: 5px; box-sizing: border-box; background: #222; color: white; border: 1px solid #444; }
+        .s-group button { width: 100%; background: var(--gold); color: black; border: none; padding: 8px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <button id="settingsBtn" onclick="toggleSettings()">⚙️ Settings</button>
+    <div id="settingsPanel">
+        <div class="s-group">
+            <label>Primary Color</label>
+            <input type="color" id="cPrimary" value="#003366" onchange="updateColors()">
+        </div>
+        <div class="s-group">
+            <label>Gold Color</label>
+            <input type="color" id="cGold" value="#d4af37" onchange="updateColors()">
+        </div>
+        <div class="s-group">
+            <label>Number Font Size</label>
+            <input type="range" id="fNum" min="80" max="200" value="140" onchange="updateFont(this.value)">
+        </div>
+        <div class="s-group">
+            <label>Video Size Ratio</label>
+            <input type="range" min="1" max="3" step="0.1" value="1.4" onchange="resizeLayout(this.value)">
+        </div>
+        <div class="s-group">
+            <label>Ticker Text</label>
+            <input type="text" id="tIn" value="Welcome to University of East Capital...">
+            <button onclick="setTicker()" style="margin-top:5px;">Update Text</button>
+        </div>
+        <div class="s-group">
+            <label>Ticker Speed (Seconds)</label>
+            <input type="range" min="10" max="50" value="20" onchange="setSpeed(this.value)">
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <div id="videoSection">
+            <img src="2.png" alt="UEC Logo" class="logo-overlay">
+            
+            <video autoplay muted loop>
+                <source src="promo.mp4" type="video/mp4">
+            </video>
+        </div>
+        
+        <div id="numberSection">
+            <div class="current-call">
+                <h2>STUDENT NUMBER</h2>
+                <div class="number" id="numDisplay">000</div>
+                <div class="window" id="winDisplay">WINDOW 0</div>
+            </div>
+            
+            <div class="history-section">
+                <h3>Previous Numbers</h3>
+                <div class="history-items" id="historyItems">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ticker-wrap">
+        <div class="ticker-text" id="tickerText">Welcome to University of East Capital - Excellence in Education - Please wait for your number to be called...</div>
+    </div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCJ_xQhr4l9K8pnHSUpYcXqYJ4fPcnTG_I",
+        authDomain: "qsystem-e7b9f.firebaseapp.com",
+        databaseURL: "https://qsystem-e7b9f-default-rtdb.firebaseio.com",
+        projectId: "qsystem-e7b9f",
+        storageBucket: "qsystem-e7b9f.firebasestorage.app",
+        messagingSenderId: "40621146758",
+        appId: "1:40621146758:web:898aae4ae113567d958707"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // إعداد لتجهيز وشحن الأصوات فور فتح المتصفح
+    if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+    }
+
+    // Settings Functions
+    window.toggleSettings = function() {
+        const p = document.getElementById('settingsPanel');
+        p.style.display = p.style.display === 'block' ? 'none' : 'block';
+    };
+
+    window.updateColors = function() {
+        document.documentElement.style.setProperty('--primary', document.getElementById('cPrimary').value);
+        document.documentElement.style.setProperty('--gold', document.getElementById('cGold').value);
+    };
+
+    window.updateFont = function(val) {
+        document.getElementById('numDisplay').style.fontSize = val + "px";
+    };
+
+    window.resizeLayout = function(val) {
+        document.getElementById('videoSection').style.flex = val;
+    };
+
+    window.setTicker = function() {
+        const txt = document.getElementById('tIn').value;
+        if(txt) document.getElementById('tickerText').textContent = txt;
+    };
+
+    window.setSpeed = function(val) {
+        document.getElementById('tickerText').style.animationDuration = val + "s";
+    };
+
+    db.ref('currentCall').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if(data) {
+            document.getElementById('numDisplay').textContent = data.number;
+            document.getElementById('winDisplay').textContent = "WINDOW " + data.window;
+            
+            const hItems = document.getElementById('historyItems');
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            div.innerHTML = `<span>Student ${data.number}</span> <span style="color:var(--gold)">W-${data.window}</span>`;
+            hItems.insertBefore(div, hItems.firstChild);
+            if(hItems.children.length > 6) hItems.lastChild.remove();
+
+            // المنطق الجديد الذكي لإجبار المتصفح على صوت Zira
+            window.speechSynthesis.cancel();
+            const m = new SpeechSynthesisUtterance(`Student number ${data.number}, go to window ${data.window}`);
+            m.rate = 0.9;
+            m.pitch = 1;
+            
+            let voices = window.speechSynthesis.getVoices();
+            let targetVoice = voices.find(v => v.name.includes("Zira"));
+            
+            // لو ملقاش Zira يفتش عن أي صوت ست إنجليزي واضح (جوجل أو غيره)
+            if (!targetVoice) {
+                targetVoice = voices.find(v => v.lang.startsWith("en") && (v.name.includes("Google") || v.name.includes("Aria") || v.name.includes("Female")));
+            }
+            
+            if (targetVoice) {
+                m.voice = targetVoice; 
+            } else {
+                m.lang = "en-US";
+            }
+
+            window.speechSynthesis.speak(m);
+        }
+    });
+</script>
+</body>
+</html>
